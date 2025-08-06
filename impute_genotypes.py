@@ -40,12 +40,14 @@ def _discover_bams(bam_root):
 	return bams
 
 
-def _impute_all(bam_root, ref_prefix, out_root, glimpse_dir, threads):
+def _impute_all(bam_root, ref_prefix, out_root, glimpse_dir, threads, sample_keep_set=None):
 	out_root.mkdir(parents=True, exist_ok=True)
 	tmp_root = Path(tempfile.gettempdir()) / 'glimpse_work'
 	tmp_root.mkdir(parents=True, exist_ok=True)
 
 	bam_paths = _discover_bams(bam_root)
+	if sample_keep_set is not None:
+		bam_paths = [p for p in bam_paths if p.stem in sample_keep_set]
 
 	chromosomes = {p.parent.name[3:] for p in bam_paths}
 	for chrom in sorted(chromosomes):
@@ -99,6 +101,7 @@ def impute_genotypes(
 	glimpse_dir,
 	threads,
 	min_gp,
+	sample_keep_set=None,
 ):
 	_impute_all(
 		source_bam_dir,
@@ -106,19 +109,26 @@ def impute_genotypes(
 		output_dir,
 		glimpse_dir,
 		threads,
+		sample_keep_set,
 	)
 	_postprocess(output_dir, threads, min_gp)
 
 
 def main():
 	p = argparse.ArgumentParser(description='Impute genotypes with GLIMPSE2')
-	p.add_argument('--source-bam-directory', required=True)
-	p.add_argument('--reference-prefix', required=True)
-	p.add_argument('--output-dir', required=True)
-	p.add_argument('--glimpse-directory', required=True)
-	p.add_argument('--threads', type=int, default=8)
-	p.add_argument('--min-gp', type=float, default=0.90)
+	p.add_argument('--source-bam-directory', required=True, help='Directory containing per-chromosome subdirectories with BAM files')
+	p.add_argument('--reference-prefix', required=True, help='Prefix of reference files (e.g., /path/to/ref/hg38) without chromosome suffix')
+	p.add_argument('--output-dir', required=True, help='Directory for all pipeline outputs')
+	p.add_argument('--glimpse-directory', required=True, help='Directory containing GLIMPSE2 executables')
+	p.add_argument('--threads', type=int, default=8, help='Number of CPU threads')
+	p.add_argument('--min-gp', type=float, default=0.90, help='Minimum genotype probability for +setGT filtering')
+	p.add_argument('--keep-samples-file', help='File with sample IDs (one per line) to keep for analysis')
 	args = p.parse_args()
+
+	keep_set = None
+	if args.keep_samples_file:
+		with open(args.keep_samples_file) as handle:
+			keep_set = {line.strip() for line in handle if line.strip()}
 
 	impute_genotypes(
 		Path(args.source_bam_directory).resolve(),
@@ -127,6 +137,7 @@ def main():
 		Path(args.glimpse_directory).resolve(),
 		args.threads,
 		args.min_gp,
+		keep_set,
 	)
 
 
