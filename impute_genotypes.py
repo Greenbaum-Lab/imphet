@@ -3,7 +3,7 @@
 End-to-end GLIMPSE2 imputation pipeline.
 
 1. Prepares each chromosome of the reference once,
-2. Imputes every BAM found in <source_bam_dir>/chr*/,
+2. Imputes every BAM found in <source_bam_dir>/{chrom}/,
 3. Concatenates the 22 chromosome-BCFs per sample,
 4. Merges all samples, applies a +setGT filter,
 5. Converts the final BCF to PLINK.
@@ -35,7 +35,7 @@ from bcfs_to_plink import (
 def _discover_bams(bam_root):
 	bams = []
 	for chr_dir in bam_root.iterdir():
-		if chr_dir.is_dir() and chr_dir.name.startswith('chr'):
+		if chr_dir.is_dir():
 			bams.extend(chr_dir.glob('*.bam'))
 	return bams
 
@@ -46,19 +46,20 @@ def _impute_all(bam_root, ref_prefix, out_root, glimpse_dir, threads, sample_kee
 	tmp_root.mkdir(parents=True, exist_ok=True)
 
 	bam_paths = _discover_bams(bam_root)
+
 	if sample_keep_set is not None:
 		bam_paths = [p for p in bam_paths if p.stem in sample_keep_set]
 
-	chromosomes = {p.parent.name[3:] for p in bam_paths}
+	chromosomes = {p.parent.name for p in bam_paths}
 	for chrom in sorted(chromosomes):
 		prepare_reference(glimpse_dir, ref_prefix, chrom)
 
 	def _worker(bam_path):
 		sample_id = bam_path.stem
-		chrom = bam_path.parent.name[3:]
+		chrom = bam_path.parent.name
 		target_bcf = out_root / sample_id / f'{sample_id}_{chrom}.bcf'
 		if target_bcf.exists() and target_bcf.with_suffix(target_bcf.suffix + '.csi').exists():
-			print(f'skip {sample_id} chr{chrom} – already imputed')
+			print(f'skip {sample_id} {chrom} – already imputed')
 			return
 		try:
 			final_bcf = impute_sample(glimpse_dir, ref_prefix, chrom, bam_path, tmp_root)

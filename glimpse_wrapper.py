@@ -19,12 +19,14 @@ import logging
 import os
 import re
 import subprocess
+import uuid
 import re as _re_nat
 from pathlib import Path
 
 
 def _init_logger():
-	log_path = Path.cwd() / 'glimpse2_wrapper.log'
+	random_id = str(uuid.uuid4())[:8]
+	log_path = Path.cwd() / f'glimpse2_wrapper_{random_id}.log'
 	log_path.parent.mkdir(parents=True, exist_ok=True)
 	logger = logging.getLogger('glimpse2.wrapper')
 	if not logger.handlers:
@@ -34,7 +36,7 @@ def _init_logger():
 		handler.setFormatter(fmt)
 		logger.addHandler(handler)
 
-		stdout_path = Path.cwd() / 'glimpse2_stdout.log'
+		stdout_path = Path.cwd() / f'glimpse2_stdout_{random_id}.log'
 		stdout_handler = logging.FileHandler(stdout_path)
 		stdout_handler.setFormatter(logging.Formatter('[%(stage)s] [%(sample)s]\n%(message)s'))
 		stdout_handler.setLevel(logging.DEBUG)
