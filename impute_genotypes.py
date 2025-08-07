@@ -40,13 +40,11 @@ def _discover_bams(bam_root):
 	return bams
 
 
-def _impute_all(bam_root, ref_prefix, out_root, glimpse_dir, threads, sample_keep_set=None):
+def _impute_all(bam_root, ref_prefix, out_root, glimpse_dir, threads, tmp_root, sample_keep_set=None):
 	out_root.mkdir(parents=True, exist_ok=True)
-	tmp_root = Path(tempfile.gettempdir()) / 'glimpse_work'
 	tmp_root.mkdir(parents=True, exist_ok=True)
 
 	bam_paths = _discover_bams(bam_root)
-
 	if sample_keep_set is not None:
 		bam_paths = [p for p in bam_paths if p.stem in sample_keep_set]
 
@@ -59,25 +57,22 @@ def _impute_all(bam_root, ref_prefix, out_root, glimpse_dir, threads, sample_kee
 		chrom = bam_path.parent.name
 		target_bcf = out_root / sample_id / f'{sample_id}_{chrom}.bcf'
 		if target_bcf.exists() and target_bcf.with_suffix(target_bcf.suffix + '.csi').exists():
-			print(f'skip {sample_id} {chrom} – already imputed')
+			print(f'skip {sample_id} {chrom} - already imputed')
 			return
 		try:
 			final_bcf = impute_sample(glimpse_dir, ref_prefix, chrom, bam_path, tmp_root)
-
 			sample_dir = out_root / sample_id
 			sample_dir.mkdir(exist_ok=True)
-
 			shutil.move(final_bcf, target_bcf)
-
 			idx_src = final_bcf.with_suffix(final_bcf.suffix + '.csi')
 			if idx_src.exists():
 				shutil.move(idx_src, target_bcf.with_suffix(target_bcf.suffix + '.csi'))
-
-			#shutil.rmtree(final_bcf.parent, ignore_errors=True)
+			shutil.rmtree(final_bcf.parent, ignore_errors=True)
 			print(f'finished {sample_id} chr{chrom}')
 		except Exception as exc:
 			print(f'sample {sample_id} chr{chrom} failed: {exc}')
 			raise
+
 
 	with ThreadPoolExecutor(max_workers=threads) as pool:
 		list(pool.map(_worker, bam_paths))
@@ -85,10 +80,8 @@ def _impute_all(bam_root, ref_prefix, out_root, glimpse_dir, threads, sample_kee
 
 def _postprocess(out_root, threads, min_gp):
 	sample_dirs = [d for d in out_root.iterdir() if d.is_dir()]
-
 	for sample_dir in sample_dirs:
 		concat_sample(sample_dir)
-
 	merged_prefix = out_root / 'merged_full'
 	merged_bcf = merge_samples(sample_dirs, merged_prefix, threads)
 	filtered_bcf = setgt_filter(merged_bcf, threads=threads, min_gp=min_gp)
@@ -102,6 +95,7 @@ def impute_genotypes(
 	glimpse_dir,
 	threads,
 	min_gp,
+	tmp_root,
 	sample_keep_set=None,
 ):
 	_impute_all(
@@ -110,6 +104,7 @@ def impute_genotypes(
 		output_dir,
 		glimpse_dir,
 		threads,
+		tmp_root,
 		sample_keep_set,
 	)
 	_postprocess(output_dir, threads, min_gp)
@@ -123,6 +118,7 @@ def main():
 	p.add_argument('--glimpse-directory', required=True, help='Directory containing GLIMPSE2 executables')
 	p.add_argument('--threads', type=int, default=8, help='Number of CPU threads')
 	p.add_argument('--min-gp', type=float, default=0.90, help='Minimum genotype probability for +setGT filtering')
+	p.add_argument('--temp-dir', default=tempfile.gettempdir())
 	p.add_argument('--keep-samples-file', help='File with sample IDs (one per line) to keep for analysis')
 	args = p.parse_args()
 

@@ -147,7 +147,7 @@ class SampleImputer(_GlimpseBase):
 			raise FileNotFoundError(self.bam)
 		self.sample_id = self.bam.stem
 		work_root = Path(work_root) if work_root else Path(os.getenv('TMPDIR', '/tmp'))
-		self.work_dir = work_root.resolve() / self.sample_id
+		self.work_dir = work_root.resolve() / f'{self.sample_id}_{self.chrom}'
 		self.phase_dir = self.work_dir / f'GLIMPSE_impute_chr{self.chrom}'
 		self.work_dir.mkdir(parents=True, exist_ok=True)
 		self.phase_dir.mkdir(parents=True, exist_ok=True)
